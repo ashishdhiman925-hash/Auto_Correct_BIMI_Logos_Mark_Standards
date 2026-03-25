@@ -1,3 +1,4 @@
+
 import streamlit as st
 import re
 import io
@@ -72,13 +73,44 @@ def correct_bimi_svg(content: bytes, strip_header=False) -> tuple[bytes | None, 
         changed = True
 
     # 3. Force viewBox to a perfect square (96x96)
-    target_vb = "0 0 96 96"
+    # ... (inside your processing loop)
+    target_dim = 96
+    target_vb = f"0 0 {target_dim} {target_dim}"
     current_vb = root.get("viewBox")
 
-    if current_vb != target_vb:
-        root.set("viewBox", target_vb)
-        messages.append(f"→ Resized viewBox to square: \"{target_vb}\"")
-        changed = True
+    if current_vb:
+        v_box = [float(x) for x in current_vb.split()]
+        curr_w = v_box[2]
+        curr_h = v_box[3]
+
+        if curr_w < target_dim or curr_h < target_dim:
+            # 1. Calculate the necessary shift to center it
+            shift_x = (target_dim - curr_w) / 2
+            shift_y = (target_dim - curr_h) / 2
+
+            # 2. Create a new group to hold all current children
+            new_group = ET.Element("g", {
+                "transform": f"translate({shift_x}, {shift_y})"
+            })
+
+            # 3. Move all elements into this group
+            for child in list(root):
+                new_group.append(child)
+                root.remove(child)
+
+            # 4. Add the group back to the root and update viewBox
+            root.append(new_group)
+            root.set("viewBox", target_vb)
+
+            messages.append(f"→ Centered content with translation: ({shift_x}, {shift_y})")
+            changed = True
+    # target_vb = "0 0 96 96"
+    # current_vb = root.get("viewBox")
+    #
+    # if current_vb <= target_vb:
+    #     root.set("viewBox", target_vb)
+    #     messages.append(f"→ Resized viewBox to square: \"{target_vb}\"")
+    #     changed = True
 
     # 4. Add <title> if missing
     has_title = any(el.tag.endswith('}title') for el in root)
