@@ -1,6 +1,5 @@
 streamlit
 lxml
-pathib
 path
 xml
 etree
