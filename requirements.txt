@@ -1,8 +1,2 @@
 streamlit
 lxml
-path
-xml
-etree
-ElementTree
-xlm.dom
-minidom
