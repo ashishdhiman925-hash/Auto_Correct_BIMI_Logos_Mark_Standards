@@ -5,6 +5,7 @@ import io
 from pathlib import Path
 from xml.etree import ElementTree as ET
 from xml.dom import minidom
+import base64
 
 
 # ────────────────────────────────────────────────
@@ -203,7 +204,6 @@ if uploaded_file is not None:
     if corrected_bytes:
         st.divider()
         col1, col2 = st.columns([1, 2])
-
         with col1:
             st.success("BIMI Ready!")
             st.download_button(
@@ -211,14 +211,29 @@ if uploaded_file is not None:
                 data=corrected_bytes,
                 file_name=f"{Path(uploaded_file.name).stem}-bimi.svg",
                 mime="image/svg+xml"
-            )
-            st.image(corrected_bytes, width=150)
-            # --- Silent Approach applied here ---
-            try:
-                st.image(corrected_bytes, width=150)
-            except Exception:
-                # Optionally show a tiny hint, or leave it blank
-                st.caption("✨ BIMI File generated (Preview unavailable)")
+            )  
+    # Encode the bytes to base64 so the browser can read it as a URI
+    try:
+        b64_svg = base64.b64encode(corrected_bytes).decode("utf-8")
+        img_html = f'<img src="data:image/svg+xml;base64,{b64_svg}" width="150" style="background-color: white; padding: 5px; border-radius: 5px;">'
+        st.markdown(img_html, unsafe_allow_html=True)
+    except Exception:
+        st.info("Preview unavailable, but download is ready.")
+        # with col1:
+        #     st.success("BIMI Ready!")
+        #     st.download_button(
+        #         label="⬇️ Download Corrected SVG",
+        #         data=corrected_bytes,
+        #         file_name=f"{Path(uploaded_file.name).stem}-bimi.svg",
+        #         mime="image/svg+xml"
+        #     )
+        #     st.image(corrected_bytes, width=150)
+        #     # --- Silent Approach applied here ---
+        #     try:
+        #         st.image(corrected_bytes, width=150)
+        #     except Exception:
+        #         # Optionally show a tiny hint, or leave it blank
+        #         st.caption("✨ BIMI File generated (Preview unavailable)")
         with col2:
             with st.expander("Show Cleaned XML Code"):
                 st.code(corrected_bytes.decode('utf-8'), language="xml")
