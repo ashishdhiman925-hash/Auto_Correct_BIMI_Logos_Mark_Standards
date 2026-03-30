@@ -179,7 +179,7 @@ strip_xml_header = st.sidebar.toggle(
     help="Some BIMI tools error out if they see <?xml version='1.0' ... ?>. Turn this on to remove it."
 )
 
-st.title("🛠️ BIMI SVG Pro-Corrector")
+st.title("🛠️ BIMI SVG Pro-Corrector\n Please ensure that your file is less then 32 KB\n Use for internal fix only")
 st.markdown("Transforming SVGs into **BIMI-compliant Tiny P/S** files with a forced **96x96** aspect ratio.")
 
 uploaded_file = st.file_uploader("Upload your SVG", type=["svg"])
