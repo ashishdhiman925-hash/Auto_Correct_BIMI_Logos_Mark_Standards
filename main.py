@@ -213,7 +213,12 @@ if uploaded_file is not None:
                 mime="image/svg+xml"
             )
             st.image(corrected_bytes, width=150)
-
+            # --- Silent Approach applied here ---
+            try:
+                st.image(corrected_bytes, width=150)
+            except Exception:
+                # Optionally show a tiny hint, or leave it blank
+                st.caption("✨ BIMI File generated (Preview unavailable)")
         with col2:
             with st.expander("Show Cleaned XML Code"):
                 st.code(corrected_bytes.decode('utf-8'), language="xml")
