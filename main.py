@@ -265,7 +265,7 @@ def correct_bimi_svg(content: bytes, strip_header=False) -> tuple[bytes | None, 
 #               STREAMLIT UI
 # ────────────────────────────────────────────────
 
-st.set_page_config(page_title="BIMI SVG Corrector", layout="wide")
+st.set_page_config(page_title="BIMI SVG Automatic GCC - Error Resolver", layout="wide")
 
 # Sidebar Configuration
 st.sidebar.header("Settings")
