@@ -178,99 +178,50 @@ st.warning("""
 st.markdown("Transforming SVGs into **BIMI-compliant Tiny P/S** files with a forced squared aspect ratio.")
 
 uploaded_file = st.file_uploader("Upload your SVG", type=["svg"])
+
 def clean_svg_markup(svg_text):
     """Removes forbidden BIMI tags and attributes."""
-    # 1. Remove forbidden tags: script, animate, etc.
+    # 1. Remove forbidden tags: script, animate, foreignObject, etc.
     forbidden_tags = ['script', 'animate', 'animateTransform', 'foreignObject', 'iframe', 'video', 'audio']
     for tag in forbidden_tags:
-        # Regex to catch both <tag>...</tag> and <tag />
-        svg_text = re.sub(rf'<{tag}[^>]*?>.*?</{tag}>', '', svg_text, flags=re.IGNORECASE | re.DOTALL)
-        svg_text = re.sub(rf'<{tag}[^>]*?/>', '', svg_text, flags=re.IGNORECASE)
+        # Removes both <tag>...</tag> and <tag/>
+        svg_text = re.sub(rf'<{tag}.*?>.*?</{tag}>', '', svg_text, flags=re.IGNORECASE | re.DOTALL)
+        svg_text = re.sub(rf'<{tag}.*?/>', '', svg_text, flags=re.IGNORECASE)
 
-    # 2. Remove illegal attributes from root <svg> tag (x, y, overflow)
-    # This specifically looks for attributes inside the FIRST <svg> tag found
-    svg_text = re.sub(r'(<svg[^>]*?)\s(x|y|overflow|enable-background)="[^"]*"', r'\1', svg_text, count=5)
+    # 2. Remove illegal attributes from the root <svg> tag specifically
+    # BIMI fails if 'x', 'y', or 'overflow' are present in the opening tag
+    svg_text = re.sub(r'\s(x|y|overflow|enable-background)="[^"]*"', '', svg_text, count=1)
     
-    # 3. Strip comments and metadata (Fixed regex)
+    # 3. Strip comments and metadata to keep file size under 32KB
     svg_text = re.sub(r'', '', svg_text, flags=re.DOTALL)
     svg_text = re.sub(r'<metadata.*?>.*?</metadata>', '', svg_text, flags=re.DOTALL)
     
     return svg_text
 
-# --- MAIN APP LOGIC ---
-uploaded_file = st.file_uploader("Upload your SVG", type=["svg"])
-
 if uploaded_file is not None:
-    # Use .getvalue() instead of .read() to avoid empty buffer issues
-    original_bytes = uploaded_file.getvalue()
+    # Read the file
+    original_bytes = uploaded_file.read()
     
-    # 1. Convert bytes to text
+    # --- NEW: PRE-PROCESS CLEANING ---
     raw_text = original_bytes.decode("utf-8")
-    
-    # 2. CLEAN the text (This is where the return happens!)
     cleaned_text = clean_svg_markup(raw_text)
-    
-    # 3. Convert back to bytes to feed your main processing function
+    # Convert back to bytes for your existing function
     cleaned_bytes = cleaned_text.encode("utf-8")
 
     with st.spinner("Processing..."):
-        # We pass 'cleaned_bytes' which contains the result of clean_svg_markup
+        # Pass the CLEANED bytes into your existing function
         corrected_bytes, log_messages = correct_bimi_svg(cleaned_bytes, strip_header=strip_xml_header)
 
     # --- ACTION LOG ---
     st.subheader("Action Log")
-    
-    # Visual proof that the cleaning function did something
-    if len(cleaned_text) < len(raw_text):
-        st.info(f"ℹ️ Security Scrubbing: Removed {len(raw_text) - len(cleaned_text)} characters of forbidden tags/metadata.")
+    # Add a custom message to the log if cleaning happened
+    if cleaned_text != raw_text:
+        st.info("ℹ️ Security: Removed forbidden tags/attributes for BIMI compliance.")
         
     for msg in log_messages:
         if "❌" in msg: st.error(msg)
         elif "⚠️" in msg: st.warning(msg)
         else: st.info(msg)
-# def clean_svg_markup(svg_text):
-#     """Removes forbidden BIMI tags and attributes."""
-#     # 1. Remove forbidden tags: script, animate, foreignObject, etc.
-#     forbidden_tags = ['script', 'animate', 'animateTransform', 'foreignObject', 'iframe', 'video', 'audio']
-#     for tag in forbidden_tags:
-#         # Removes both <tag>...</tag> and <tag/>
-#         svg_text = re.sub(rf'<{tag}.*?>.*?</{tag}>', '', svg_text, flags=re.IGNORECASE | re.DOTALL)
-#         svg_text = re.sub(rf'<{tag}.*?/>', '', svg_text, flags=re.IGNORECASE)
-
-#     # 2. Remove illegal attributes from the root <svg> tag specifically
-#     # BIMI fails if 'x', 'y', or 'overflow' are present in the opening tag
-#     svg_text = re.sub(r'\s(x|y|overflow|enable-background)="[^"]*"', '', svg_text, count=1)
-    
-#     # 3. Strip comments and metadata to keep file size under 32KB
-#     svg_text = re.sub(r'', '', svg_text, flags=re.DOTALL)
-#     svg_text = re.sub(r'<metadata.*?>.*?</metadata>', '', svg_text, flags=re.DOTALL)
-    
-#     return svg_text
-
-# if uploaded_file is not None:
-#     # Read the file
-#     original_bytes = uploaded_file.read()
-    
-#     # --- NEW: PRE-PROCESS CLEANING ---
-#     raw_text = original_bytes.decode("utf-8")
-#     cleaned_text = clean_svg_markup(raw_text)
-#     # Convert back to bytes for your existing function
-#     cleaned_bytes = cleaned_text.encode("utf-8")
-
-#     with st.spinner("Processing..."):
-#         # Pass the CLEANED bytes into your existing function
-#         corrected_bytes, log_messages = correct_bimi_svg(cleaned_bytes, strip_header=strip_xml_header)
-
-#     # --- ACTION LOG ---
-#     st.subheader("Action Log")
-#     # Add a custom message to the log if cleaning happened
-#     if cleaned_text != raw_text:
-#         st.info("ℹ️ Security: Removed forbidden tags/attributes for BIMI compliance.")
-        
-#     for msg in log_messages:
-#         if "❌" in msg: st.error(msg)
-#         elif "⚠️" in msg: st.warning(msg)
-#         else: st.info(msg)
 # if uploaded_file is not None:
 #     original_bytes = uploaded_file.read()
 
