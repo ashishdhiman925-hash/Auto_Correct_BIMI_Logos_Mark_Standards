@@ -275,8 +275,8 @@ strip_xml_header = st.sidebar.toggle(
     help="Their can be case that our GCC BIMI check error out : Turn this on to remove; if needed <?xml version='1.0' ... ?>."
 )
 
-st.title("🛠️ BIMI SVG Automatic GCC Error Resolver \n Please ensure that your file is less then 32 KB \n Use it for internal SVG fix only \n Do not Expose this to External Customers")
-st.markdown("Transforming SVGs into **BIMI-compliant Tiny P/S** files with a forced sqaured aspect ratio.")
+st.title("🛠️ BIMI SVG Automatic GCC Error Resolver" \n "Please ensure that your file is less then 32 KB" \n "Use it for internal SVG fix only" \n "Do not Expose this to External Customers")
+st.markdown("Transforming SVGs into **BIMI-compliant Tiny P/S** files with a forced squared aspect ratio.")
 
 uploaded_file = st.file_uploader("Upload your SVG", type=["svg"])
 
