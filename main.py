@@ -109,8 +109,8 @@ def correct_bimi_svg(content: bytes, strip_header=False) -> tuple[bytes | None, 
             # Overwrite width/height with the viewBox values
             curr_w = v_box[2]
             curr_h = v_box[3]
-        except (ValueError, IndexError):
-            pass
+    except (ValueError, IndexError):
+        pass
 
 # 4. Determine the side length for the new square.
 # This picks the largest of all values (width, height, or 96).
