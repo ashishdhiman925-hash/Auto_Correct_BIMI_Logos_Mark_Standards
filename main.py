@@ -86,7 +86,37 @@ def correct_bimi_svg(content: bytes, strip_header=False) -> tuple[bytes | None, 
 
     # 1. Determine the side length for the new square viewBox.
     # This takes the largest side, but ensures it is at least 'target_dim' (96).
-    
+    # 1. Initialize variables to 0.0 to prevent UnboundLocalError
+    curr_w = 0.0
+    curr_h = 0.0
+    target_dim = 96.0
+
+# 2. Try to get width/height from the <svg> attributes first
+    try:
+        if root.get('width'):
+        # Using float() handles the decimals like 691.625
+            curr_w = float(root.get('width').replace('px', '').strip())
+        if root.get('height'):
+            curr_h = float(root.get('height').replace('px', '').strip())
+    except (ValueError, TypeError):
+        pass
+
+# 3. If a viewBox exists, it should take priority for dimensions
+    if current_vb:
+        try:
+            v_box = [float(x) for x in current_vb.split()]
+        if len(v_box) >= 4:
+            # Overwrite width/height with the viewBox values
+            curr_w = v_box[2]
+            curr_h = v_box[3]
+        except (ValueError, IndexError):
+            pass
+
+# 4. Determine the side length for the new square.
+# This picks the largest of all values (width, height, or 96).
+    side_length = max(curr_w, curr_h, target_dim)
+
+# Now side_length is your new width AND new height for a perfect square.
     side_length = max(curr_w, curr_h, target_dim)
 
     # 2. Check if we actually need to change anything. 
