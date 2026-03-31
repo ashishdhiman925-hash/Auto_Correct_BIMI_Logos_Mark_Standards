@@ -6,8 +6,6 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 from xml.dom import minidom
 import base64
-
-
 # ────────────────────────────────────────────────
 #                LOGIC FUNCTIONS
 # ────────────────────────────────────────────────
@@ -44,7 +42,9 @@ def correct_bimi_svg(content: bytes, strip_header=False) -> tuple[bytes | None, 
     content = sanitize_content(content)
 
     try:
-        ET.register_namespace('', "http://www.w3.org/2000/svg")
+        # Register namespace to avoid 'ns0' prefixes
+        SVG_NS = "http://www.w3.org/2000/svg"
+        ET.register_namespace('', SVG_NS)
         tree = ET.ElementTree(ET.fromstring(content))
         root = tree.getroot()
     except Exception as e:
@@ -73,13 +73,12 @@ def correct_bimi_svg(content: bytes, strip_header=False) -> tuple[bytes | None, 
         messages.append(f"→ Removed forbidden attribute: {key}")
         changed = True
 
-    # --- 1. Initialize Variables ---
+    # --- Dimension & ViewBox Calculation ---
     curr_w = 0.0
     curr_h = 0.0
     target_dim = 96.0
     current_vb = root.get("viewBox")
 
-    # --- 2. Extract from Attributes ---
     try:
         w_attr = root.get('width')
         h_attr = root.get('height')
@@ -90,7 +89,6 @@ def correct_bimi_svg(content: bytes, strip_header=False) -> tuple[bytes | None, 
     except (ValueError, TypeError):
         pass
 
-    # --- 3. Handle ViewBox & "Highest Value" Logic ---
     if current_vb:
         try:
             v_box = [float(x) for x in current_vb.split()]
@@ -100,40 +98,54 @@ def correct_bimi_svg(content: bytes, strip_header=False) -> tuple[bytes | None, 
         except (ValueError, IndexError):
             pass
 
-    # --- 4. Determine final side length ---
     side_length = max(curr_w, curr_h, target_dim)
 
-    # --- 5. Apply the Centering and Squaring Logic ---
-    if curr_w != side_length or curr_h != side_length or not current_vb:
-        shift_x = (side_length - curr_w) / 2
-        shift_y = (side_length - curr_h) / 2
+    # --- Title Handling (Extraction & Cleanup) ---
+    # BIMI requires <title> to be a DIRECT child of <svg>. 
+    # We find existing title text, then remove ALL title tags to prevent duplicates or nested titles.
+    final_title_text = "Company Logo"
+    titles_found = []
+    
+    # Search the entire tree for any title tag
+    for parent in tree.iter():
+        for child in list(parent):
+            if child.tag.endswith('title'):
+                if child.text and child.text.strip():
+                    final_title_text = child.text.strip()
+                parent.remove(child)
+                titles_found.append(child)
 
-        new_group = ET.Element("g", {
-            "id": "bimi-centered-group",
-            "transform": f"translate({shift_x}, {shift_y})"
-        })
+    # --- Centering and Squaring Logic ---
+    # We wrap everything EXCEPT the title into a centering group
+    shift_x = (side_length - curr_w) / 2
+    shift_y = (side_length - curr_h) / 2
 
-        for child in list(root):
-            if child != new_group:
-                new_group.append(child)
-                root.remove(child)
+    new_group = ET.Element("g", {
+        "id": "bimi-centered-group",
+        "transform": f"translate({shift_x}, {shift_y})"
+    })
 
-        root.append(new_group)
-        
-        new_target_vb = f"0 0 {side_length} {side_length}"
-        root.set("viewBox", new_target_vb)
+    # Move all current children (which are now title-free) into the group
+    for child in list(root):
+        new_group.append(child)
+        root.remove(child)
 
-        messages.append(f"→ Squared to {side_length}x{side_length}. Centered with: ({shift_x}, {shift_y})")
-        changed = True
+    root.append(new_group)
+    
+    # Update viewBox to square
+    root.set("viewBox", f"0 0 {side_length} {side_length}")
+    messages.append(f"→ Squared to {side_length}x{side_length} and centered content.")
 
-    # --- 4. Add <title> if missing (FIXED: Uses .iter() to find title even if moved into a group) ---
-    has_title = any(el.tag.endswith('title') for el in root.iter())
-    if not has_title:
-        title_el = ET.Element("{http://www.w3.org/2000/svg}title")
-        title_el.text = "Company Logo"
-        root.insert(0, title_el)
-        messages.append("→ Added missing <title> element")
-        changed = True
+    # --- Re-insert Title as Direct Child ---
+    # Always insert at the very top (index 0) of the root <svg>
+    title_el = ET.Element(f"{{{SVG_NS}}}title")
+    title_el.text = final_title_text
+    root.insert(0, title_el)
+    
+    if not titles_found:
+        messages.append("→ Added missing <title> element as direct child.")
+    else:
+        messages.append("→ Validated <title> element as direct child of <svg>.")
 
     try:
         corrected_str = prettify(root, strip_header=strip_header)
@@ -153,24 +165,22 @@ st.sidebar.header("Settings")
 strip_xml_header = st.sidebar.toggle(
     "Remove XML Header",
     value=False,
-    help="Turn this on to remove the <?xml version='1.0' ... ?> declaration if needed."
+    help="Turn this on if GCC errors out due to the XML declaration."
 )
 
 st.title("🛠️ BIMI SVG Automatic GCC Error Resolver")
-st.warning("""
-    Please ensure that your file is less than 32 KB.
-    Use it for internal SVG fix only.
-""")
+st.warning("Ensure file is < 32 KB. Use for internal SVG fixes only.")
 
 uploaded_file = st.file_uploader("Upload your SVG", type=["svg"])
 
 def clean_svg_markup(svg_text):
+    """Removes forbidden BIMI tags and attributes."""
     forbidden_tags = ['script', 'animate', 'animateTransform', 'foreignObject', 'iframe', 'video', 'audio']
     for tag in forbidden_tags:
         svg_text = re.sub(rf'<{tag}.*?>.*?</{tag}>', '', svg_text, flags=re.IGNORECASE | re.DOTALL)
         svg_text = re.sub(rf'<{tag}.*?/>', '', svg_text, flags=re.IGNORECASE)
 
-    svg_text = re.sub(r'\s(x|y|overflow|enable-background)="[^"]*"', '', svg_text, count=1)
+    svg_text = re.sub(r'\s(x|y|overflow|enable-background|xml:space)="[^"]*"', '', svg_text)
     svg_text = re.sub(r'<metadata.*?>.*?</metadata>', '', svg_text, flags=re.DOTALL)
     return svg_text
 
@@ -185,11 +195,10 @@ if uploaded_file is not None:
 
     st.subheader("Action Log")
     if cleaned_text != raw_text:
-        st.info("ℹ️ Security: Removed forbidden tags/attributes for BIMI compliance.")
+        st.info("ℹ️ Security: Stripped forbidden elements/attributes.")
         
     for msg in log_messages:
         if "❌" in msg: st.error(msg)
-        elif "⚠️" in msg: st.warning(msg)
         else: st.info(msg)
 
     if corrected_bytes:
@@ -203,12 +212,8 @@ if uploaded_file is not None:
                 file_name=f"{Path(uploaded_file.name).stem}-bimi.svg",
                 mime="image/svg+xml"
             )  
-            try:
-                b64_svg = base64.b64encode(corrected_bytes).decode("utf-8")
-                img_html = f'<img src="data:image/svg+xml;base64,{b64_svg}" width="150" style="background-color: white; padding: 5px; border-radius: 5px;">'
-                st.markdown(img_html, unsafe_allow_html=True)
-            except Exception:
-                st.info("Preview unavailable.")
+            b64_svg = base64.b64encode(corrected_bytes).decode("utf-8")
+            st.markdown(f'<img src="data:image/svg+xml;base64,{b64_svg}" width="150" style="background-color: white; padding: 5px; border-radius: 5px;">', unsafe_allow_html=True)
         
         with col2:
             with st.expander("Show Cleaned XML Code"):
