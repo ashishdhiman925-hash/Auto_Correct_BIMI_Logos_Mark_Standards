@@ -86,7 +86,32 @@ def correct_bimi_svg(content: bytes, strip_header=False) -> tuple[bytes | None, 
 
     # 1. Determine the side length for the new square viewBox.
     # This takes the largest side, but ensures it is at least 'target_dim' (96).
+    curr_w = 0.0
+    curr_h = 0.0
+    target_dim = 96.0
+    # 2. Extract dimensions from attributes (if they exist)
+# Handle cases like width="691.625" by converting to float
+    try:
+        if root.get('width'):
+            curr_w = float(root.get('width').replace('px', '').strip())
+        if root.get('height'):
+            curr_h = float(root.get('height').replace('px', '').strip())
+    except (ValueError, TypeError):
+        pass # Keep defaults if parsing fails
+
+# 3. Overwrite with ViewBox if present (your current logic)
+    if current_vb:
+        try:
+            v_box = [float(x) for x in current_vb.split()]
+            if len(v_box) >= 4:
+                curr_w = v_box[2]
+                curr_h = v_box[3]
+        except (ValueError, IndexError):
+            pass
+
+# 4. Final calculation is now safe because curr_w/h are guaranteed to exist
     side_length = max(curr_w, curr_h, target_dim)
+    # side_length = max(curr_w, curr_h, target_dim)
 
     # 2. Check if we actually need to change anything. 
     # We change it if it's not square OR if it's smaller than the target.
