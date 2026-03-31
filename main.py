@@ -213,21 +213,6 @@ if uploaded_file is not None:
         st.markdown(img_html, unsafe_allow_html=True)
     except Exception:
         st.info("Preview unavailable, but download is ready.")
-        # with col1:
-        #     st.success("BIMI Ready!")
-        #     st.download_button(
-        #         label="⬇️ Download Corrected SVG",
-        #         data=corrected_bytes,
-        #         file_name=f"{Path(uploaded_file.name).stem}-bimi.svg",
-        #         mime="image/svg+xml"
-        #     )
-        #     st.image(corrected_bytes, width=150)
-        #     # --- Silent Approach applied here ---
-        #     try:
-        #         st.image(corrected_bytes, width=150)
-        #     except Exception:
-        #         # Optionally show a tiny hint, or leave it blank
-        #         st.caption("✨ BIMI File generated (Preview unavailable)")
         with col2:
             with st.expander("Show Cleaned XML Code"):
                 st.code(corrected_bytes.decode('utf-8'), language="xml")
