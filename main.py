@@ -72,80 +72,144 @@ def correct_bimi_svg(content: bytes, strip_header=False) -> tuple[bytes | None, 
         del root.attrib[key]
         messages.append(f"→ Removed forbidden attribute: {key}")
         changed = True
-
-    # 3. Force viewBox to a perfect square (96x96)
-    # ... (inside your processing loop)
-    target_dim = 96
-    target_vb = f"0 0 {target_dim} {target_dim}"
-    current_vb = root.get("viewBox")
-    # Adding this code to make sure its forcing 96 by 96 if less but also make other as Square if need be : 
-    if current_vb:
-        v_box = [float(x) for x in current_vb.split()]
-        curr_w = v_box[2]
-        curr_h = v_box[3]
-
-    # 1. Determine the side length for the new square viewBox.
-    # This takes the largest side, but ensures it is at least 'target_dim' (96).
-    # 1. Initialize variables to 0.0 to prevent UnboundLocalError
+# --- 1. Initialize Variables ---
+    # We start with 0.0 to prevent UnboundLocalError
     curr_w = 0.0
     curr_h = 0.0
     target_dim = 96.0
+    current_vb = root.get("viewBox")
 
-# 2. Try to get width/height from the <svg> attributes first
+    # --- 2. Extract from Attributes (Handles decimals like 691.625) ---
     try:
-        if root.get('width'):
-        # Using float() handles the decimals like 691.625
-            curr_w = float(root.get('width').replace('px', '').strip())
-        if root.get('height'):
-            curr_h = float(root.get('height').replace('px', '').strip())
+        w_attr = root.get('width')
+        h_attr = root.get('height')
+        if w_attr:
+            # Strip 'px' and spaces, then convert to float
+            curr_w = float(w_attr.replace('px', '').strip())
+        if h_attr:
+            curr_h = float(h_attr.replace('px', '').strip())
     except (ValueError, TypeError):
         pass
 
-# 3. If a viewBox exists, it should take priority for dimensions
+    # --- 3. Handle ViewBox & "Highest Value" Logic ---
+    # This addresses Requirement 2: Use maximum if viewBox/attributes differ
     if current_vb:
         try:
             v_box = [float(x) for x in current_vb.split()]
             if len(v_box) >= 4:
-                # Overwrite width/height with the viewBox values
-                curr_w = v_box[2]
-                curr_h = v_box[3]
+                # We take the larger of the existing value vs the viewBox value
+                curr_w = max(curr_w, v_box[2])
+                curr_h = max(curr_h, v_box[3])
         except (ValueError, IndexError):
             pass
 
-# 4. Determine the side length for the new square.
-# This picks the largest of all values (width, height, or 96).
+    # --- 4. Determine final side length (Requirement 1 & 3) ---
+    # This picks the largest side found, but ensures it is AT LEAST 96.0
     side_length = max(curr_w, curr_h, target_dim)
 
-# Now side_length is your new width AND new height for a perfect square.
-    side_length = max(curr_w, curr_h, target_dim)
-
-    # 2. Check if we actually need to change anything. 
-    # We change it if it's not square OR if it's smaller than the target.
-    if curr_w != side_length or curr_h != side_length:
+    # --- 5. Apply the Centering and Squaring Logic ---
+    # Check if we need to change it (if it's not square or too small)
+    if curr_w != side_length or curr_h != side_length or not current_vb:
         
-        # 3. Calculate shifts to center the content within the new square
+        # Calculate shifts to center the content within the new square
         shift_x = (side_length - curr_w) / 2
         shift_y = (side_length - curr_h) / 2
 
-        # 4. Create the centering group
+        # Create the centering group
         new_group = ET.Element("g", {
+            "id": "bimi-centered-group",
             "transform": f"translate({shift_x}, {shift_y})"
         })
 
-        # 5. Move all elements into this group
+        # Move all elements into this group
         for child in list(root):
-            new_group.append(child)
-            root.remove(child)
+            # Skip the group itself if it was somehow already there
+            if child != new_group:
+                new_group.append(child)
+                root.remove(child)
 
-        # 6. Update the root
+        # Update the root
         root.append(new_group)
         
-        # 7. Update viewBox to be a perfect square: "0 0 side side"
+        # Update viewBox to be a perfect square (Requirement 3)
         new_target_vb = f"0 0 {side_length} {side_length}"
         root.set("viewBox", new_target_vb)
 
         messages.append(f"→ Squared to {side_length}x{side_length}. Centered with: ({shift_x}, {shift_y})")
         changed = True
+#     # 3. Force viewBox to a perfect square (96x96)
+#     # ... (inside your processing loop)
+#     target_dim = 96
+#     target_vb = f"0 0 {target_dim} {target_dim}"
+#     current_vb = root.get("viewBox")
+#     # Adding this code to make sure its forcing 96 by 96 if less but also make other as Square if need be : 
+#     if current_vb:
+#         v_box = [float(x) for x in current_vb.split()]
+#         curr_w = v_box[2]
+#         curr_h = v_box[3]
+
+#     # 1. Determine the side length for the new square viewBox.
+#     # This takes the largest side, but ensures it is at least 'target_dim' (96).
+#     # 1. Initialize variables to 0.0 to prevent UnboundLocalError
+#     curr_w = 0.0
+#     curr_h = 0.0
+#     target_dim = 96.0
+
+# # 2. Try to get width/height from the <svg> attributes first
+#     try:
+#         if root.get('width'):
+#         # Using float() handles the decimals like 691.625
+#             curr_w = float(root.get('width').replace('px', '').strip())
+#         if root.get('height'):
+#             curr_h = float(root.get('height').replace('px', '').strip())
+#     except (ValueError, TypeError):
+#         pass
+
+# # 3. If a viewBox exists, it should take priority for dimensions
+#     if current_vb:
+#         try:
+#             v_box = [float(x) for x in current_vb.split()]
+#             if len(v_box) >= 4:
+#                 # Overwrite width/height with the viewBox values
+#                 curr_w = v_box[2]
+#                 curr_h = v_box[3]
+#         except (ValueError, IndexError):
+#             pass
+
+# # 4. Determine the side length for the new square.
+# # This picks the largest of all values (width, height, or 96).
+#     side_length = max(curr_w, curr_h, target_dim)
+
+# # Now side_length is your new width AND new height for a perfect square.
+#     side_length = max(curr_w, curr_h, target_dim)
+
+#     # 2. Check if we actually need to change anything. 
+#     # We change it if it's not square OR if it's smaller than the target.
+#     if curr_w != side_length or curr_h != side_length:
+        
+#         # 3. Calculate shifts to center the content within the new square
+#         shift_x = (side_length - curr_w) / 2
+#         shift_y = (side_length - curr_h) / 2
+
+#         # 4. Create the centering group
+#         new_group = ET.Element("g", {
+#             "transform": f"translate({shift_x}, {shift_y})"
+#         })
+
+#         # 5. Move all elements into this group
+#         for child in list(root):
+#             new_group.append(child)
+#             root.remove(child)
+
+#         # 6. Update the root
+#         root.append(new_group)
+        
+#         # 7. Update viewBox to be a perfect square: "0 0 side side"
+#         new_target_vb = f"0 0 {side_length} {side_length}"
+#         root.set("viewBox", new_target_vb)
+
+#         messages.append(f"→ Squared to {side_length}x{side_length}. Centered with: ({shift_x}, {shift_y})")
+#         changed = True
     # if current_vb:
     #     v_box = [float(x) for x in current_vb.split()]
     #     curr_w = v_box[2]
