@@ -176,7 +176,7 @@ def correct_bimi_svg(content: bytes, strip_header=False) -> tuple[bytes | None, 
 #                STREAMLIT UI
 # ────────────────────────────────────────────────
 
-st.set_page_config(page_title="BIMI SVG Automatic GCC Error Resolver", layout="wide")
+st.set_page_config(page_title="BIMI SVG Automatic GlobalSign Error Resolver", layout="wide")
 
 st.sidebar.header("Settings")
 strip_xml_header = st.sidebar.toggle(
@@ -186,7 +186,7 @@ strip_xml_header = st.sidebar.toggle(
 )
 
 st.title("🛠️ BIMI SVG Automatic GCC Error Resolver")
-st.warning("Ensure file is < 32 KB. Use for internal SVG fixes only.")
+st.warning("Ensure file is < 32 KB.  \nUse for internal SVG fixes only  \ncontact Ashish Dhiman for any feedback or change needed")
 
 uploaded_file = st.file_uploader("Upload your SVG", type=["svg"])
 
