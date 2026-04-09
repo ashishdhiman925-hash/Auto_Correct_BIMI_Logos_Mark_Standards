@@ -185,8 +185,8 @@ strip_xml_header = st.sidebar.toggle(
     help="Turn this on if GCC errors out due to the XML declaration."
 )
 
-st.title("🛠️ BIMI SVG Automatic GCC Error Resolver")
-st.warning("Ensure file is < 32 KB.  \nUse for internal SVG fixes only  \ncontact Ashish Dhiman for any feedback or change needed")
+st.title("BIMI SVG Automatic GlobalSign Error Resolver")
+st.warning("Ensure file is < 32 KB.Use for internal SVG fixes only  \nContact Ashish Dhiman for any feedback or change needed")
 
 uploaded_file = st.file_uploader("Upload your SVG", type=["svg"])
 
