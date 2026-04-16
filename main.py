@@ -1,4 +1,3 @@
-
 import streamlit as st
 import re
 import io
@@ -6,6 +5,8 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 from xml.dom import minidom
 import base64
+
+
 # ────────────────────────────────────────────────
 #                LOGIC FUNCTIONS
 # ────────────────────────────────────────────────
@@ -36,7 +37,6 @@ def prettify(elem, strip_header=False):
 
     return pretty_xml
 
-
 def correct_bimi_svg(content: bytes, strip_header=False) -> tuple[bytes | None, list[str]]:
     messages = []
     content = sanitize_content(content)
@@ -63,63 +63,98 @@ def correct_bimi_svg(content: bytes, strip_header=False) -> tuple[bytes | None, 
         messages.append("→ Set baseProfile=\"tiny-ps\"")
         changed = True
 
-    # 2. Convert 'style' attributes to direct attributes for tiny-ps compliance
-    # BIMI validators often fail when style strings are used instead of attributes.
+    # --- NEW STEP: Flatten Internal <style> Blocks ---
+    # This step finds <style> tags, parses simple class/id selectors,
+    # and applies them as attributes to elements.
+    style_blocks = root.findall(".//{http://www.w3.org/2000/svg}style")
+    if not style_blocks:
+        # Also check without namespace just in case
+        style_blocks = root.findall(".//style")
+
+    for s_block in style_blocks:
+        if s_block.text:
+            # Simple regex to find .classname { prop:val; }
+            rules = re.findall(r'([^{]+)\s*\{\s*([^}]+)\s*\}', s_block.text)
+            for selector, style_content in rules:
+                selector = selector.strip()
+                # Extract properties
+                props = {}
+                for item in style_content.split(';'):
+                    if ':' in item:
+                        k, v = item.split(':', 1)
+                        props[k.strip().lower()] = v.strip()
+
+                # Apply to elements matching class or id
+                if selector.startswith('.'):
+                    search_class = selector[1:]
+                    for elem in tree.iter():
+                        if elem.get('class') == search_class:
+                            for p, val in props.items():
+                                elem.set(p, val)
+                elif selector.startswith('#'):
+                    search_id = selector[1:]
+                    for elem in tree.iter():
+                        if elem.get('id') == search_id:
+                            for p, val in props.items():
+                                elem.set(p, val)
+
+        # Remove the forbidden <style> element entirely
+        parent_map = {c: p for p in tree.iter() for c in p}
+        if s_block in parent_map:
+            parent_map[s_block].remove(s_block)
+            messages.append("→ Removed forbidden <style> block and flattened CSS.")
+            changed = True
+
+    # 2. Convert 'style' attributes to direct attributes
     style_count = 0
+    allowed_presentation_attrs = {
+        "fill", "fill-opacity", "fill-rule", "stroke", "stroke-width",
+        "stroke-linecap", "stroke-linejoin", "stroke-miterlimit",
+        "stroke-dasharray", "stroke-dashoffset", "stroke-opacity",
+        "display", "visibility", "opacity", "stop-color", "stop-opacity",
+        "font-family", "font-size", "font-style", "font-weight", "text-anchor"
+    }
+
     for elem in tree.iter():
         style_str = elem.get("style")
         if style_str:
-            # Split style string (e.g., "fill:#020202;stroke:none") into pairs
             styles = [s.strip() for s in style_str.split(";") if ":" in s]
             for s in styles:
-                prop, val = s.split(":", 1)
-                prop = prop.strip().lower()
-                val = val.strip()
-
-                # Only move common visual properties to attributes
-                if prop in {"fill", "stroke", "stroke-width", "opacity", "fill-opacity", "stroke-opacity"}:
-                    elem.set(prop, val)
-
-            # Remove the style attribute after migration
+                try:
+                    prop, val = s.split(":", 1)
+                    prop = prop.strip().lower()
+                    val = val.strip()
+                    if prop in allowed_presentation_attrs:
+                        elem.set(prop, val)
+                except ValueError:
+                    continue
             del elem.attrib["style"]
             style_count += 1
             changed = True
 
     if style_count > 0:
-        messages.append(f"→ Converted {style_count} 'style' strings to direct attributes.")
+        messages.append(f"→ Converted {style_count} 'style' strings to attributes.")
 
-    # 3. Case-insensitive removal of forbidden attributes
-    targets = {"x", "y", "width", "height", "overflow", "xml:space"}
-    keys_to_delete = [k for k in root.attrib if k.lower() in targets]
-
-    for key in keys_to_delete:
-        del root.attrib[key]
-        messages.append(f"→ Removed forbidden attribute: {key}")
-        changed = True
-
+    # 3. Final cleanup of forbidden attributes
+    targets = {"x", "y", "width", "height", "overflow", "xml:space", "class"}
+    for elem in tree.iter():
+        keys_to_delete = [k for k in elem.attrib if k.lower() in targets]
+        for key in keys_to_delete:
+            del elem.attrib[key]
+            changed = True
     # --- Dimension & ViewBox Calculation ---
     curr_w = 0.0
     curr_h = 0.0
     target_dim = 96.0
     current_vb = root.get("viewBox")
 
-    try:
-        # Check attributes first
-        w_attr = root.get('width')
-        h_attr = root.get('height')
-        if w_attr:
-            curr_w = float(w_attr.replace('px', '').strip())
-        if h_attr:
-            curr_h = float(h_attr.replace('px', '').strip())
-    except (ValueError, TypeError):
-        pass
-
+    # Dimensions check logic
     if current_vb:
         try:
             v_box = [float(x) for x in current_vb.split()]
             if len(v_box) >= 4:
-                curr_w = max(curr_w, v_box[2])
-                curr_h = max(curr_h, v_box[3])
+                curr_w = v_box[2]
+                curr_h = v_box[3]
         except (ValueError, IndexError):
             pass
 
@@ -186,7 +221,7 @@ strip_xml_header = st.sidebar.toggle(
 )
 
 st.title("BIMI SVG Automatic GlobalSign Error Resolver")
-st.warning("Ensure file is < 32 KB.Use for internal SVG fixes only  \nContact Ashish Dhiman for any feedback or change needed")
+st.warning("Ensure file is < 32 KB. Use for internal SVG fixes only. \nContact Ashish Dhiman for any feedback or change needed")
 
 uploaded_file = st.file_uploader("Upload your SVG", type=["svg"])
 
@@ -241,4 +276,6 @@ if uploaded_file is not None:
         with col2:
             with st.expander("Show Cleaned XML Code"):
                 st.code(corrected_bytes.decode('utf-8'), language="xml")
+
+
 
